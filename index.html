@@ -1,0 +1,968 @@
+<!DOCTYPE html>
+<html lang="ja" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>人狼ゲーム Online - Realtime Multiplayer</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        mystic: {
+                            950: '#0a0612',
+                            900: '#120b24',
+                            800: '#1d1238',
+                            700: '#2b1b54',
+                            600: '#3d2678',
+                        },
+                        blood: {
+                            600: '#dc2626',
+                            700: '#b91c1c',
+                            800: '#991b1b',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- FontAwesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1p:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'M PLUS Rounded 1p', sans-serif;
+            background-color: #0a0612;
+            color: #f3f4f6;
+            overflow-x: hidden;
+        }
+        .mystic-glow {
+            box-shadow: 0 0 25px rgba(139, 92, 246, 0.25);
+        }
+        .blood-glow {
+            box-shadow: 0 0 25px rgba(220, 38, 38, 0.35);
+        }
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #120b24;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #3d2678;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #5b39b3;
+        }
+    </style>
+</head>
+<body class="min-h-screen bg-mystic-950 flex flex-col justify-between selection:bg-purple-600 selection:text-white">
+
+    <!-- Header -->
+    <header class="bg-mystic-900 border-b border-mystic-700 p-4 shadow-lg sticky top-0 z-50">
+        <div class="max-w-6xl mx-auto flex justify-between items-center">
+            <div class="flex items-center space-x-3 cursor-pointer" onclick="location.reload()">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-600 to-blood-700 flex items-center justify-center shadow-lg mystic-glow">
+                    <i class="fa-solid fa-moon text-white text-xl"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl font-black tracking-wider bg-gradient-to-r from-purple-400 via-pink-300 to-blood-600 bg-clip-text text-transparent">人狼村 Online</h1>
+                    <p class="text-xs text-purple-300/70">Real-Time Online Social Deduction</p>
+                </div>
+            </div>
+
+            <div id="room-info-badge" class="hidden flex items-center space-x-3">
+                <div class="bg-mystic-800 border border-mystic-600 px-3 py-1.5 rounded-full text-xs font-bold text-purple-200 flex items-center gap-2">
+                    <span id="day-night-indicator" class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                    <span id="room-id-display">ROOM: ----</span>
+                </div>
+                <button onclick="copyRoomCode()" class="bg-purple-900/60 hover:bg-purple-800 border border-purple-600 text-purple-200 px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5">
+                    <i class="fa-solid fa-copy"></i> コードコピー
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main App Container -->
+    <main class="flex-grow max-w-6xl w-full mx-auto p-4 md:p-6 flex flex-col justify-center">
+
+        <!-- SCREEN 1: LOGIN / JOIN / CREATE ROOM -->
+        <div id="view-entry" class="max-w-md mx-auto w-full space-y-6 py-8">
+            <div class="text-center space-y-2">
+                <h2 class="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-purple-300 to-pink-400">オンライン人狼</h2>
+                <p class="text-purple-300/80 text-sm">ルームを作成するか、コードを入力して参加してください</p>
+            </div>
+
+            <div class="bg-mystic-900/90 border border-mystic-700/80 rounded-3xl p-6 shadow-2xl mystic-glow space-y-5">
+                <div>
+                    <label class="block text-xs font-bold text-purple-300 mb-1.5">あなたのプレイヤー名</label>
+                    <input type="text" id="input-player-name" placeholder="名前を入力..." maxlength="12" class="w-full bg-mystic-800 border border-mystic-600 px-4 py-3 rounded-xl text-white font-bold focus:outline-none focus:border-purple-400">
+                </div>
+
+                <div class="pt-2 border-t border-mystic-800 space-y-3">
+                    <div>
+                        <label class="block text-xs font-bold text-purple-300 mb-1.5">ルームコード（参加時）</label>
+                        <input type="text" id="input-room-code" placeholder="6桁のコード (例: A1B2C3)" uppercase class="w-full bg-mystic-800 border border-mystic-600 px-4 py-3 rounded-xl text-white font-mono font-bold focus:outline-none focus:border-purple-400 uppercase tracking-widest">
+                    </div>
+
+                    <button id="btn-join-room" class="w-full py-3.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:opacity-95 text-white font-bold rounded-xl shadow-lg transition flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-right-to-bracket"></i> ルームに参加する
+                    </button>
+                </div>
+
+                <div class="relative flex py-2 items-center">
+                    <div class="flex-grow border-t border-mystic-800"></div>
+                    <span class="flex-shrink mx-4 text-xs font-bold text-purple-400/60">または</span>
+                    <div class="flex-grow border-t border-mystic-800"></div>
+                </div>
+
+                <button id="btn-create-room" class="w-full py-3.5 bg-gradient-to-r from-blood-700 via-purple-700 to-indigo-700 hover:opacity-95 text-white font-bold rounded-xl shadow-lg transition flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-plus-circle"></i> 新規ルームを作成 (ホスト)
+                </button>
+            </div>
+        </div>
+
+        <!-- SCREEN 2: LOBBY -->
+        <div id="view-lobby" class="hidden space-y-6">
+            <div class="bg-gradient-to-r from-mystic-900 via-mystic-800 to-mystic-900 border border-mystic-700 rounded-2xl p-5 shadow-xl flex flex-col md:flex-row justify-between items-center gap-4">
+                <div>
+                    <span class="text-xs font-bold text-purple-400 uppercase tracking-wider">WAITING LOBBY</span>
+                    <h2 id="lobby-room-title" class="text-2xl font-black text-white">ルーム: ------</h2>
+                    <p class="text-xs text-purple-300/80">全員が集まるまでお待ちください。ホストがゲームを開始します。</p>
+                </div>
+                <div id="host-controls" class="hidden flex items-center space-x-3 w-full md:w-auto">
+                    <button id="btn-start-game" class="w-full md:w-auto px-6 py-3 bg-gradient-to-r from-purple-600 to-blood-700 hover:opacity-95 text-white font-bold rounded-xl shadow-lg mystic-glow transition flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-play"></i> ゲームを開始する
+                    </button>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <!-- Joined Players List -->
+                <div class="md:col-span-2 bg-mystic-900/80 border border-mystic-700 rounded-2xl p-5 shadow-xl space-y-4">
+                    <div class="flex justify-between items-center">
+                        <h3 class="text-base font-bold text-purple-200 flex items-center gap-2">
+                            <i class="fa-solid fa-users text-purple-400"></i> 参加者一覧
+                        </h3>
+                        <span id="lobby-player-count" class="text-xs bg-purple-950 border border-purple-700 text-purple-300 px-3 py-1 rounded-full font-bold">0人</span>
+                    </div>
+                    <div id="lobby-players-grid" class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                        <!-- Dynamic player cards -->
+                    </div>
+                </div>
+
+                <!-- Role Settings Config (Visible to all, editable by host) -->
+                <div class="bg-mystic-900/80 border border-mystic-700 rounded-2xl p-5 shadow-xl space-y-4 flex flex-col justify-between">
+                    <div class="space-y-3">
+                        <h3 class="text-base font-bold text-purple-200 flex items-center gap-2">
+                            <i class="fa-solid fa-mask text-pink-400"></i> ゲーム設定 & 配役
+                        </h3>
+                        <div id="role-settings-list" class="space-y-2 text-xs">
+                            <!-- Role distribution preview -->
+                        </div>
+                    </div>
+                    <div class="text-xs text-purple-300/60 bg-mystic-950/60 p-3 rounded-xl border border-mystic-800">
+                        ※ 最小4人からプレイ可能。プレイヤー数に応じて配役が調整されます。
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SCREEN 3: GAMEPLAY AREA (Night / Discussion / Voting) -->
+        <div id="view-game" class="hidden space-y-6">
+
+            <!-- Phase Header Banner -->
+            <div class="bg-gradient-to-r from-mystic-900 via-mystic-800 to-mystic-900 border border-mystic-700 rounded-2xl p-5 shadow-xl flex flex-col md:flex-row justify-between items-center gap-4">
+                <div class="flex items-center space-x-4">
+                    <div id="phase-icon-box" class="w-14 h-14 rounded-2xl bg-gradient-to-br from-purple-600 to-indigo-800 flex items-center justify-center text-white text-2xl shadow-lg">
+                        <i id="phase-icon" class="fa-solid fa-moon text-purple-300"></i>
+                    </div>
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <h2 id="phase-title" class="text-2xl font-black text-white">夜フェーズ</h2>
+                            <span id="my-role-badge" class="px-3 py-1 rounded-full text-xs font-bold bg-purple-950 text-purple-300 border border-purple-600">
+                                役職: 未割り当て
+                            </span>
+                        </div>
+                        <p id="phase-desc" class="text-xs text-purple-300/80">能力を行使してください。</p>
+                    </div>
+                </div>
+
+                <div class="flex items-center space-x-3 w-full md:w-auto justify-end">
+                    <div class="bg-mystic-950/80 border border-mystic-700 px-4 py-2 rounded-xl flex items-center space-x-2">
+                        <i class="fa-solid fa-stopwatch text-purple-400"></i>
+                        <span id="game-timer-display" class="font-mono text-xl font-bold text-purple-200">--:--</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Main Interactive Content: 2-column layout (Left: Game Actions/Status, Right: Realtime Chat) -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+                <!-- Left Column: Actions / Player Cards -->
+                <div class="lg:col-span-2 space-y-5">
+                    <!-- Action Box / Secret Info -->
+                    <div id="action-card-box" class="bg-mystic-900/90 border border-purple-500/40 rounded-2xl p-5 shadow-xl space-y-4 mystic-glow">
+                        <h3 id="action-card-title" class="text-lg font-bold text-white flex items-center gap-2">
+                            <i class="fa-solid fa-wand-magic-sparkles text-purple-400"></i> あなたの夜のアクション
+                        </h3>
+                        <div id="action-card-body" class="space-y-3">
+                            <!-- Dynamic action options or results -->
+                        </div>
+                    </div>
+
+                    <!-- Village Living Status -->
+                    <div class="bg-mystic-900/80 border border-mystic-700 rounded-2xl p-5 shadow-xl space-y-3">
+                        <div class="flex justify-between items-center">
+                            <h3 class="text-base font-bold text-purple-200 flex items-center gap-2">
+                                <i class="fa-solid fa-users text-purple-400"></i> 参加者の状態
+                            </h3>
+                            <span id="living-status-badge" class="text-xs bg-purple-950 border border-purple-700 text-purple-300 px-3 py-1 rounded-full font-bold">生存: -/--人</span>
+                        </div>
+                        <div id="game-players-grid" class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                            <!-- Live player status cards -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Column: Real-time Chat Box -->
+                <div class="space-y-4">
+                    <div class="bg-mystic-900/80 border border-mystic-700 rounded-2xl p-4 shadow-xl flex flex-col h-[520px]">
+                        <div class="flex justify-between items-center mb-3">
+                            <h3 class="text-base font-bold text-purple-200 flex items-center gap-2">
+                                <i class="fa-solid fa-comments text-indigo-400"></i> チャット
+                            </h3>
+                            <span id="chat-mode-badge" class="text-xs px-2.5 py-0.5 rounded-full font-bold bg-blue-900/50 text-blue-300 border border-blue-600">全体チャット</span>
+                        </div>
+
+                        <!-- Chat Messages Window -->
+                        <div id="chat-messages-container" class="flex-grow bg-mystic-950/80 border border-mystic-800 rounded-xl p-3 overflow-y-auto space-y-2 text-xs">
+                            <!-- Messages -->
+                        </div>
+
+                        <!-- Chat Input Form -->
+                        <form id="chat-form" class="mt-3 flex gap-2">
+                            <input type="text" id="chat-input" placeholder="メッセージを入力..." class="flex-grow bg-mystic-800 border border-mystic-600 px-3 py-2 rounded-xl text-white text-xs focus:outline-none focus:border-purple-400">
+                            <button type="submit" class="bg-purple-600 hover:bg-purple-500 text-white font-bold px-4 py-2 rounded-xl text-xs transition">
+                                送信
+                            </button>
+                        </form>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- SCREEN 4: GAME OVER -->
+        <div id="view-gameover" class="hidden max-w-xl mx-auto w-full space-y-6 py-8 text-center">
+            <div class="bg-mystic-900/95 border-2 border-purple-500/60 rounded-3xl p-8 shadow-2xl space-y-6 mystic-glow">
+                <div id="gameover-icon" class="w-24 h-24 bg-gradient-to-br from-purple-600 to-amber-600 rounded-full flex items-center justify-center mx-auto text-4xl text-white shadow-xl">
+                    <i class="fa-solid fa-trophy"></i>
+                </div>
+                <div class="space-y-2">
+                    <div class="text-xs font-bold text-purple-400 tracking-widest uppercase">ゲーム決着</div>
+                    <h2 id="gameover-title" class="text-3xl font-black text-white">村人陣営の勝利！</h2>
+                    <p id="gameover-desc" class="text-purple-200 text-sm">勝敗の概要メッセージ</p>
+                </div>
+
+                <div class="space-y-2 text-left">
+                    <div class="text-xs font-bold text-purple-300">全プレイヤーの役職公開:</div>
+                    <div id="final-roles-list" class="space-y-2 max-h-52 overflow-y-auto pr-1">
+                        <!-- Injected dynamically -->
+                    </div>
+                </div>
+
+                <div class="pt-4">
+                    <button onclick="location.reload()" class="w-full py-4 bg-gradient-to-r from-purple-600 to-indigo-600 hover:opacity-95 text-white font-bold rounded-2xl shadow-lg transition text-lg flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-rotate-right"></i> ロビーに戻る
+                    </button>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Modal Notifications -->
+    <div id="custom-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-mystic-900 border border-mystic-700 rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4 text-center mystic-glow">
+            <div class="w-14 h-14 bg-purple-600/20 text-purple-400 rounded-full flex items-center justify-center mx-auto text-2xl border border-purple-500/30">
+                <i class="fa-solid fa-bell"></i>
+            </div>
+            <h3 id="modal-title" class="text-xl font-bold text-white">お知らせ</h3>
+            <p id="modal-msg" class="text-sm text-purple-200">メッセージ内容</p>
+            <button onclick="closeModal()" class="w-full py-3 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-xl shadow transition">
+                OK
+            </button>
+        </div>
+    </div>
+
+    <!-- Firebase SDK & Online Logic Script -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, getDoc, updateDoc, onSnapshot, collection, addDoc, query } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Firebase Config Setup
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'werewolf-online-default';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
+            apiKey: "demo-api-key",
+            authDomain: "demo.firebaseapp.com",
+            projectId: "demo-project",
+            storageBucket: "demo.appspot.com",
+            messagingSenderId: "123456789",
+            appId: "1:123456789:web:abcdef"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        // Role Metadata
+        const ROLES = {
+            villager: { name: '村人', side: 'village', icon: 'fa-user', color: 'bg-blue-600/20 text-blue-300 border-blue-500/40', desc: '特能なし。議論と推理で人狼を探し出しましょう。' },
+            werewolf: { name: '人狼', side: 'werewolf', icon: 'fa-wolf-pack-battalion', color: 'bg-blood-700/20 text-red-300 border-blood-600/40', desc: '毎夜、村人1人を襲撃します。夜間専用チャットで味方と相談可能。' },
+            seer: { name: '占い師', side: 'village', icon: 'fa-crystal-ball', color: 'bg-purple-600/20 text-purple-300 border-purple-500/40', desc: '毎夜、1人の正体（人狼か人間か）を占うことができます。' },
+            knight: { name: '騎士', side: 'village', icon: 'fa-shield-halved', color: 'bg-emerald-600/20 text-emerald-300 border-emerald-500/40', desc: '毎夜、人狼の襲撃から1人を護衛できます。' },
+            medium: { name: '霊媒師', side: 'village', icon: 'fa-ghost', color: 'bg-indigo-600/20 text-indigo-300 border-indigo-500/40', desc: '前日に処刑された人が「人狼」だったか判明します。' },
+            madman: { name: '狂人', side: 'werewolf', icon: 'fa-face-grin-tongue-wink', color: 'bg-amber-600/20 text-amber-300 border-amber-500/40', desc: '人狼陣営の人間。人狼が勝利すれば勝ちとなります。' }
+        };
+
+        // State Variables
+        let currentUser = null;
+        let currentRoomId = null;
+        let roomData = null;
+        let roomUnsubscribe = null;
+        let chatUnsubscribe = null;
+        let localNightActionSubmitted = false;
+
+        // --- AUTHENTICATION INIT ---
+        async function initAuth() {
+            try {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    const cred = await signInWithCustomToken(auth, __initial_auth_token);
+                    currentUser = cred.user;
+                } else {
+                    const cred = await signInAnonymously(auth);
+                    currentUser = cred.user;
+                }
+            } catch (err) {
+                console.error("Auth error:", err);
+            }
+        }
+        await initAuth();
+
+        // --- HELPER PATHS (RULE 1 MANDATORY) ---
+        function getRoomDocRef(roomId) {
+            return doc(db, 'artifacts', appId, 'public', 'data', 'werewolf_rooms', roomId);
+        }
+        function getChatColRef(roomId) {
+            return collection(db, 'artifacts', appId, 'public', 'data', 'werewolf_rooms', roomId, 'chats');
+        }
+
+        // --- ROOM CREATION & JOINING ---
+        window.createRoom = async function() {
+            const nameInput = document.getElementById('input-player-name').value.trim();
+            if (!nameInput) {
+                showModal("名前を入力してください");
+                return;
+            }
+            if (!currentUser) return;
+
+            const roomId = Math.random().toString(36).substring(2, 8).toUpperCase();
+            const initialRoomState = {
+                roomId: roomId,
+                hostUid: currentUser.uid,
+                status: 'lobby', // lobby, night, day_morning, day_discussion, day_voting, game_over
+                dayCount: 1,
+                players: {
+                    [currentUser.uid]: {
+                        uid: currentUser.uid,
+                        name: nameInput,
+                        isAlive: true,
+                        role: null,
+                        isHost: true
+                    }
+                },
+                nightActions: {},
+                votes: {},
+                winner: null,
+                createdAt: Date.now()
+            };
+
+            await setDoc(getRoomDocRef(roomId), initialRoomState);
+            joinRoomSession(roomId);
+        };
+
+        window.joinRoom = async function() {
+            const nameInput = document.getElementById('input-player-name').value.trim();
+            const codeInput = document.getElementById('input-room-code').value.trim().toUpperCase();
+
+            if (!nameInput) { showModal("名前を入力してください"); return; }
+            if (!codeInput) { showModal("6桁のルームコードを入力してください"); return; }
+            if (!currentUser) return;
+
+            const roomRef = getRoomDocRef(codeInput);
+            const snap = await getDoc(roomRef);
+
+            if (!snap.exists()) {
+                showModal("指定されたルームが見つかりません。");
+                return;
+            }
+
+            const data = snap.data();
+            if (data.status !== 'lobby') {
+                showModal("ゲームはすでに開始されています。");
+                return;
+            }
+
+            // Add player
+            const updatedPlayers = { ...data.players };
+            updatedPlayers[currentUser.uid] = {
+                uid: currentUser.uid,
+                name: nameInput,
+                isAlive: true,
+                role: null,
+                isHost: false
+            };
+
+            await updateDoc(roomRef, { players: updatedPlayers });
+            joinRoomSession(codeInput);
+        };
+
+        function joinRoomSession(roomId) {
+            currentRoomId = roomId;
+            document.getElementById('room-id-display').textContent = `ROOM: ${roomId}`;
+            document.getElementById('room-info-badge').classList.remove('hidden');
+
+            subscribeToRoom(roomId);
+            subscribeToChat(roomId);
+        }
+
+        function subscribeToRoom(roomId) {
+            if (roomUnsubscribe) roomUnsubscribe();
+
+            roomUnsubscribe = onSnapshot(getRoomDocRef(roomId), (docSnap) => {
+                if (!docSnap.exists()) return;
+                roomData = docSnap.data();
+                renderUI();
+            }, (err) => {
+                console.error("Room sync error:", err);
+            });
+        }
+
+        // --- REALTIME CHAT SYSTEM ---
+        function subscribeToChat(roomId) {
+            if (chatUnsubscribe) chatUnsubscribe();
+
+            const chatCol = getChatColRef(roomId);
+            chatUnsubscribe = onSnapshot(chatCol, (snapshot) => {
+                const messagesContainer = document.getElementById('chat-messages-container');
+                messagesContainer.innerHTML = '';
+
+                let msgs = [];
+                snapshot.forEach(doc => msgs.push(doc.data()));
+                msgs.sort((a, b) => a.timestamp - b.timestamp);
+
+                const myPlayer = roomData?.players[currentUser?.uid];
+                const isWolf = myPlayer?.role === 'werewolf';
+
+                msgs.forEach(m => {
+                    // Filter night chat for non-werewolves
+                    if (m.channel === 'wolf' && !isWolf) return;
+
+                    const div = document.createElement('div');
+                    const isMe = m.senderUid === currentUser?.uid;
+                    const isWolfMsg = m.channel === 'wolf';
+
+                    div.className = `p-2 rounded-xl flex flex-col ${isWolfMsg ? 'bg-blood-900/40 border border-blood-700/50' : 'bg-mystic-800/80 border border-mystic-700'}`;
+                    div.innerHTML = `
+                        <div class="flex justify-between items-center text-[10px] text-purple-300/70 mb-0.5">
+                            <span class="font-bold ${isMe ? 'text-amber-300' : 'text-purple-300'}">${m.senderName} ${isWolfMsg ? '(人狼チャット)' : ''}</span>
+                            <span>${new Date(m.timestamp).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</span>
+                        </div>
+                        <p class="text-white text-xs break-words">${escapeHtml(m.text)}</p>
+                    `;
+                    messagesContainer.appendChild(div);
+                });
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            }, (err) => console.error("Chat sync error:", err));
+        }
+
+        document.getElementById('chat-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const input = document.getElementById('chat-input');
+            const text = input.value.trim();
+            if (!text || !currentRoomId || !currentUser || !roomData) return;
+
+            const myPlayer = roomData.players[currentUser.uid];
+            if (!myPlayer.isAlive && roomData.status !== 'lobby' && roomData.status !== 'game_over') {
+                showModal("死亡したプレイヤーは発言できません。");
+                return;
+            }
+
+            const channel = (roomData.status === 'night' && myPlayer.role === 'werewolf') ? 'wolf' : 'all';
+
+            await addDoc(getChatColRef(currentRoomId), {
+                senderUid: currentUser.uid,
+                senderName: myPlayer.name,
+                text: text,
+                channel: channel,
+                timestamp: Date.now()
+            });
+
+            input.value = '';
+        });
+
+        // --- MAIN RENDER ROUTER ---
+        function renderUI() {
+            if (!roomData) return;
+
+            const status = roomData.status;
+            const myPlayer = roomData.players[currentUser.uid];
+
+            // Hide all views
+            ['view-entry', 'view-lobby', 'view-game', 'view-gameover'].forEach(id => {
+                document.getElementById(id).classList.add('hidden');
+            });
+
+            if (status === 'lobby') {
+                document.getElementById('view-lobby').classList.remove('hidden');
+                renderLobbyView();
+            } else if (status === 'game_over') {
+                document.getElementById('view-gameover').classList.remove('hidden');
+                renderGameOverView();
+            } else {
+                document.getElementById('view-game').classList.remove('hidden');
+                renderGameView();
+            }
+        }
+
+        // --- LOBBY VIEW RENDER ---
+        function renderLobbyView() {
+            document.getElementById('lobby-room-title').textContent = `ルーム: ${roomData.roomId}`;
+            const playersArr = Object.values(roomData.players);
+            document.getElementById('lobby-player-count').textContent = `${playersArr.length}人`;
+
+            const isHost = roomData.hostUid === currentUser.uid;
+            document.getElementById('host-controls').style.display = isHost ? 'block' : 'none';
+
+            const grid = document.getElementById('lobby-players-grid');
+            grid.innerHTML = '';
+            playersArr.forEach(p => {
+                const div = document.createElement('div');
+                div.className = 'p-3 bg-mystic-800/80 border border-mystic-600 rounded-xl flex items-center justify-between';
+                div.innerHTML = `
+                    <span class="font-bold text-sm text-white flex items-center gap-2">
+                        <i class="fa-solid fa-user text-purple-400"></i> ${escapeHtml(p.name)}
+                    </span>
+                    ${p.isHost ? '<span class="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded-full font-bold">ホスト</span>' : ''}
+                `;
+                grid.appendChild(div);
+            });
+
+            // Role summary list preview
+            const roleList = document.getElementById('role-settings-list');
+            roleList.innerHTML = '';
+            const config = getBalancedRoleConfig(playersArr.length);
+            for (let [roleKey, count] of Object.entries(config)) {
+                if (count > 0) {
+                    const r = ROLES[roleKey];
+                    const div = document.createElement('div');
+                    div.className = `p-2 rounded-lg border flex justify-between items-center ${r.color}`;
+                    div.innerHTML = `
+                        <span class="font-bold flex items-center gap-1.5"><i class="fa-solid ${r.icon}"></i> ${r.name}</span>
+                        <span class="font-bold">${count}人</span>
+                    `;
+                    roleList.appendChild(div);
+                }
+            }
+        }
+
+        function getBalancedRoleConfig(count) {
+            if (count <= 4) return { werewolf: 1, seer: 1, villager: 2 };
+            if (count === 5) return { werewolf: 1, seer: 1, knight: 1, villager: 2 };
+            if (count === 6) return { werewolf: 1, seer: 1, knight: 1, madman: 1, villager: 2 };
+            if (count === 7) return { werewolf: 2, seer: 1, knight: 1, medium: 1, villager: 2 };
+            if (count === 8) return { werewolf: 2, seer: 1, knight: 1, medium: 1, madman: 1, villager: 2 };
+            return { werewolf: 2, seer: 1, knight: 1, medium: 1, madman: 1, villager: count - 6 };
+        }
+
+        // --- HOST START GAME ---
+        document.getElementById('btn-start-game').addEventListener('click', async () => {
+            const playersArr = Object.values(roomData.players);
+            if (playersArr.length < 4) {
+                showModal("ゲームを開始するには最低4人のプレイヤーが必要です。");
+                return;
+            }
+
+            const roleConfig = getBalancedRoleConfig(playersArr.length);
+            let pool = [];
+            for (let [key, count] of Object.entries(roleConfig)) {
+                for (let c = 0; c < count; c++) pool.push(key);
+            }
+            pool.sort(() => Math.random() - 0.5);
+
+            const updatedPlayers = { ...roomData.players };
+            playersArr.forEach((p, idx) => {
+                updatedPlayers[p.uid].role = pool[idx];
+                updatedPlayers[p.uid].isAlive = true;
+            });
+
+            await updateDoc(getRoomDocRef(currentRoomId), {
+                players: updatedPlayers,
+                status: 'night',
+                dayCount: 1,
+                nightActions: {},
+                votes: {}
+            });
+        });
+
+        // --- GAMEPLAY VIEW RENDER ---
+        function renderGameView() {
+            const myPlayer = roomData.players[currentUser.uid];
+            const myRole = ROLES[myPlayer?.role] || { name: '不審者', icon: 'fa-question', color: 'bg-gray-800' };
+
+            // Header My Role Badge
+            const roleBadge = document.getElementById('my-role-badge');
+            roleBadge.className = `px-3 py-1 rounded-full text-xs font-bold border ${myRole.color}`;
+            roleBadge.innerHTML = `<i class="fa-solid ${myRole.icon} mr-1"></i> あなたの役職: ${myRole.name}`;
+
+            // Living Players List
+            const livingGrid = document.getElementById('game-players-grid');
+            livingGrid.innerHTML = '';
+            let aliveCount = 0;
+            const playersArr = Object.values(roomData.players);
+
+            playersArr.forEach(p => {
+                if (p.isAlive) aliveCount++;
+                const isMe = p.uid === currentUser.uid;
+                const div = document.createElement('div');
+                div.className = `p-3 rounded-xl border flex flex-col justify-between ${p.isAlive ? 'bg-mystic-800/80 border-mystic-600' : 'bg-mystic-950/40 border-mystic-900 opacity-60'}`;
+                div.innerHTML = `
+                    <div class="flex justify-between items-center">
+                        <span class="font-bold text-xs text-white truncate">${escapeHtml(p.name)} ${isMe ? '(自分)' : ''}</span>
+                        <span class="text-[10px] px-2 py-0.5 rounded-full font-bold ${p.isAlive ? 'bg-emerald-500/20 text-emerald-300' : 'bg-blood-700/20 text-red-400'}">
+                            ${p.isAlive ? '生存' : '死亡'}
+                        </span>
+                    </div>
+                `;
+                livingGrid.appendChild(div);
+            });
+            document.getElementById('living-status-badge').textContent = `生存: ${aliveCount}/${playersArr.length}人`;
+
+            // Render according to Phase
+            const phaseIcon = document.getElementById('phase-icon');
+            const phaseTitle = document.getElementById('phase-title');
+            const phaseDesc = document.getElementById('phase-desc');
+            const chatBadge = document.getElementById('chat-mode-badge');
+
+            if (roomData.status === 'night') {
+                phaseIcon.className = 'fa-solid fa-moon text-purple-300';
+                phaseTitle.textContent = `第${roomData.dayCount}日目・夜`;
+                phaseDesc.textContent = '能力者たちは行動を選択してください。人狼は夜チャットで会話できます。';
+
+                if (myPlayer.role === 'werewolf') {
+                    chatBadge.textContent = '人狼チャット (専用)';
+                    chatBadge.className = 'text-xs px-2.5 py-0.5 rounded-full font-bold bg-blood-900/60 text-red-300 border border-blood-600';
+                } else {
+                    chatBadge.textContent = '夜間静寂';
+                    chatBadge.className = 'text-xs px-2.5 py-0.5 rounded-full font-bold bg-gray-800 text-gray-400';
+                }
+
+                renderNightActionBox(myPlayer);
+            } else if (roomData.status === 'day_discussion') {
+                phaseIcon.className = 'fa-solid fa-sun text-amber-300';
+                phaseTitle.textContent = `第${roomData.dayCount}日目・昼の議論`;
+                phaseDesc.textContent = '人狼と思われる人物を話し合って特定してください。';
+                chatBadge.textContent = '全体チャット';
+                chatBadge.className = 'text-xs px-2.5 py-0.5 rounded-full font-bold bg-blue-900/50 text-blue-300 border border-blue-600';
+
+                renderDiscussionBox();
+            } else if (roomData.status === 'day_voting') {
+                phaseIcon.className = 'fa-solid fa-gavel text-amber-400';
+                phaseTitle.textContent = `第${roomData.dayCount}日目・処刑投票`;
+                phaseDesc.textContent = '処刑したいプレイヤーに投票してください。';
+
+                renderVotingBox(myPlayer);
+            }
+        }
+
+        // --- NIGHT ACTION UI ---
+        function renderNightActionBox(myPlayer) {
+            const body = document.getElementById('action-card-body');
+            body.innerHTML = '';
+
+            if (!myPlayer.isAlive) {
+                body.innerHTML = '<p class="text-sm text-purple-300">あなたは死亡しています。夜の行動を見守りましょう。</p>';
+                return;
+            }
+
+            const role = myPlayer.role;
+            const aliveOthers = Object.values(roomData.players).filter(p => p.isAlive && p.uid !== currentUser.uid);
+
+            if (role === 'werewolf') {
+                body.innerHTML = `<p class="text-xs text-purple-200 mb-2">襲撃するターゲットを選択してください：</p>`;
+                const grid = document.createElement('div');
+                grid.className = 'grid grid-cols-2 gap-2';
+                aliveOthers.forEach(p => {
+                    if (p.role !== 'werewolf') {
+                        const btn = document.createElement('button');
+                        btn.className = 'p-2.5 bg-mystic-800 hover:bg-blood-900/50 border border-mystic-600 rounded-xl text-xs font-bold text-white transition flex items-center justify-between';
+                        btn.innerHTML = `<span>${escapeHtml(p.name)}</span> <i class="fa-solid fa-skull text-blood-500"></i>`;
+                        btn.onclick = () => submitNightTarget('wolfTarget', p.uid);
+                        grid.appendChild(btn);
+                    }
+                });
+                body.appendChild(grid);
+            } else if (role === 'seer') {
+                body.innerHTML = `<p class="text-xs text-purple-200 mb-2">占うプレイヤーを選択してください：</p>`;
+                const grid = document.createElement('div');
+                grid.className = 'grid grid-cols-2 gap-2';
+                aliveOthers.forEach(p => {
+                    const btn = document.createElement('button');
+                    btn.className = 'p-2.5 bg-mystic-800 hover:bg-purple-900/50 border border-mystic-600 rounded-xl text-xs font-bold text-white transition flex items-center justify-between';
+                    btn.innerHTML = `<span>${escapeHtml(p.name)}</span> <i class="fa-solid fa-eye text-purple-400"></i>`;
+                    btn.onclick = () => {
+                        const isWolf = p.role === 'werewolf';
+                        showModal(`【占い結果】\n${p.name} は 『${isWolf ? '人狼' : '人間'}』 です。`);
+                        submitNightTarget('seerTarget', p.uid);
+                    };
+                    grid.appendChild(btn);
+                });
+                body.appendChild(grid);
+            } else if (role === 'knight') {
+                body.innerHTML = `<p class="text-xs text-purple-200 mb-2">護衛するプレイヤーを選択してください：</p>`;
+                const grid = document.createElement('div');
+                grid.className = 'grid grid-cols-2 gap-2';
+                aliveOthers.forEach(p => {
+                    const btn = document.createElement('button');
+                    btn.className = 'p-2.5 bg-mystic-800 hover:bg-emerald-900/50 border border-mystic-600 rounded-xl text-xs font-bold text-white transition flex items-center justify-between';
+                    btn.innerHTML = `<span>${escapeHtml(p.name)}</span> <i class="fa-solid fa-shield text-emerald-400"></i>`;
+                    btn.onclick = () => submitNightTarget('knightTarget', p.uid);
+                    grid.appendChild(btn);
+                });
+                body.appendChild(grid);
+            } else {
+                body.innerHTML = `<p class="text-sm text-purple-300/80">特能はありません。夜が明けるのを待ちましょう。</p>`;
+            }
+
+            // Host button to advance night when actions complete
+            if (roomData.hostUid === currentUser.uid) {
+                const advanceBtn = document.createElement('button');
+                advanceBtn.className = 'w-full mt-3 py-2.5 bg-purple-700 hover:bg-purple-600 text-white font-bold rounded-xl text-xs transition';
+                advanceBtn.textContent = '（ホスト）夜を明かす (朝へ進む)';
+                advanceBtn.onclick = resolveNightPhase;
+                body.appendChild(advanceBtn);
+            }
+        }
+
+        async function submitNightTarget(key, targetUid) {
+            const updatedActions = { ...roomData.nightActions, [key]: targetUid };
+            await updateDoc(getRoomDocRef(currentRoomId), { nightActions: updatedActions });
+            showModal("選択を送信しました。");
+        }
+
+        // --- RESOLVE NIGHT (HOST TRIGGERED OR AUTO) ---
+        async function resolveNightPhase() {
+            const actions = roomData.nightActions || {};
+            const wolfTarget = actions.wolfTarget;
+            const knightTarget = actions.knightTarget;
+
+            let casualtyUid = null;
+            if (wolfTarget && wolfTarget !== knightTarget) {
+                casualtyUid = wolfTarget;
+            }
+
+            const updatedPlayers = { ...roomData.players };
+            let casualtyName = "なし";
+            if (casualtyUid && updatedPlayers[casualtyUid]) {
+                updatedPlayers[casualtyUid].isAlive = false;
+                casualtyName = updatedPlayers[casualtyUid].name;
+            }
+
+            await updateDoc(getRoomDocRef(currentRoomId), {
+                players: updatedPlayers,
+                status: 'day_discussion',
+                lastCasualtyName: casualtyName,
+                nightActions: {}
+            });
+
+            checkWinCondition(updatedPlayers);
+        }
+
+        // --- DISCUSSION BOX ---
+        function renderDiscussionBox() {
+            const body = document.getElementById('action-card-body');
+            body.innerHTML = `
+                <div class="bg-mystic-950/80 border border-mystic-800 rounded-xl p-4 text-center space-y-3">
+                    <p class="text-sm font-bold text-white">昨夜の犠牲者: <span class="text-blood-500 font-black">${roomData.lastCasualtyName || 'なし'}</span></p>
+                    <p class="text-xs text-purple-300">右側のチャット欄で自由に議論を行ってください。</p>
+                </div>
+            `;
+
+            if (roomData.hostUid === currentUser.uid) {
+                const btn = document.createElement('button');
+                btn.className = 'w-full py-3 bg-gradient-to-r from-blood-700 to-purple-700 hover:opacity-95 text-white font-bold rounded-xl shadow text-xs transition';
+                btn.textContent = '（ホスト）議論を終了して投票に進む';
+                btn.onclick = async () => {
+                    await updateDoc(getRoomDocRef(currentRoomId), { status: 'day_voting', votes: {} });
+                };
+                body.appendChild(btn);
+            }
+        }
+
+        // --- VOTING BOX ---
+        function renderVotingBox(myPlayer) {
+            const body = document.getElementById('action-card-body');
+            body.innerHTML = '';
+
+            if (!myPlayer.isAlive) {
+                body.innerHTML = '<p class="text-sm text-purple-300">あなたは死亡しています。投票権はありません。</p>';
+                return;
+            }
+
+            const hasVoted = roomData.votes && roomData.votes[currentUser.uid];
+            if (hasVoted) {
+                body.innerHTML = '<p class="text-sm text-emerald-400 font-bold text-center">投票完了しました。全員の投票完了を待っています。</p>';
+            } else {
+                body.innerHTML = `<p class="text-xs text-purple-200 mb-2">処刑したいプレイヤーを選択してください：</p>`;
+                const grid = document.createElement('div');
+                grid.className = 'grid grid-cols-2 gap-2';
+                const aliveOthers = Object.values(roomData.players).filter(p => p.isAlive && p.uid !== currentUser.uid);
+
+                aliveOthers.forEach(p => {
+                    const btn = document.createElement('button');
+                    btn.className = 'p-2.5 bg-mystic-800 hover:bg-blood-900/50 border border-mystic-600 rounded-xl text-xs font-bold text-white transition flex items-center justify-between';
+                    btn.innerHTML = `<span>${escapeHtml(p.name)}</span> <i class="fa-solid fa-gavel text-amber-500"></i>`;
+                    btn.onclick = () => submitVote(p.uid);
+                    grid.appendChild(btn);
+                });
+                body.appendChild(grid);
+            }
+
+            if (roomData.hostUid === currentUser.uid) {
+                const advanceBtn = document.createElement('button');
+                advanceBtn.className = 'w-full mt-3 py-2.5 bg-purple-700 hover:bg-purple-600 text-white font-bold rounded-xl text-xs transition';
+                advanceBtn.textContent = '（ホスト）投票を開票して処刑を実行';
+                advanceBtn.onclick = resolveVoting;
+                body.appendChild(advanceBtn);
+            }
+        }
+
+        async function submitVote(targetUid) {
+            const updatedVotes = { ...roomData.votes, [currentUser.uid]: targetUid };
+            await updateDoc(getRoomDocRef(currentRoomId), { votes: updatedVotes });
+        }
+
+        async function resolveVoting() {
+            const votes = roomData.votes || {};
+            let tally = {};
+            for (let voterUid in votes) {
+                let target = votes[voterUid];
+                tally[target] = (tally[target] || 0) + 1;
+            }
+
+            let maxVotes = -1;
+            let executedUid = null;
+            for (let target in tally) {
+                if (tally[target] > maxVotes) {
+                    maxVotes = tally[target];
+                    executedUid = target;
+                }
+            }
+
+            const updatedPlayers = { ...roomData.players };
+            if (executedUid && updatedPlayers[executedUid]) {
+                updatedPlayers[executedUid].isAlive = false;
+            }
+
+            const win = checkWinCondition(updatedPlayers);
+            if (!win) {
+                await updateDoc(getRoomDocRef(currentRoomId), {
+                    players: updatedPlayers,
+                    status: 'night',
+                    dayCount: roomData.dayCount + 1,
+                    votes: {},
+                    nightActions: {}
+                });
+            }
+        }
+
+        // --- WIN CONDITION CHECK ---
+        function checkWinCondition(playersObj) {
+            const alive = Object.values(playersObj).filter(p => p.isAlive);
+            const wolves = alive.filter(p => p.role === 'werewolf');
+            const villagers = alive.filter(p => p.role !== 'werewolf');
+
+            if (wolves.length === 0) {
+                endGame('villager', '村人陣営の勝利！', '人狼を全て追放することに成功しました。');
+                return true;
+            } else if (wolves.length >= villagers.length) {
+                endGame('werewolf', '人狼陣営の勝利！', '人狼の数が村人を上回り、村は喰らい尽くされました。');
+                return true;
+            }
+            return false;
+        }
+
+        async function endGame(side, title, desc) {
+            await updateDoc(getRoomDocRef(currentRoomId), {
+                status: 'game_over',
+                winnerSide: side,
+                winnerTitle: title,
+                winnerDesc: desc
+            });
+        }
+
+        // --- GAME OVER VIEW ---
+        function renderGameOverView() {
+            document.getElementById('gameover-title').textContent = roomData.winnerTitle || 'ゲーム終了';
+            document.getElementById('gameover-desc').textContent = roomData.winnerDesc || '';
+
+            const list = document.getElementById('final-roles-list');
+            list.innerHTML = '';
+            Object.values(roomData.players).forEach(p => {
+                const r = ROLES[p.role] || { name: '不明', icon: 'fa-question', color: 'bg-gray-800' };
+                const div = document.createElement('div');
+                div.className = `p-2.5 rounded-xl border flex items-center justify-between text-xs ${r.color}`;
+                div.innerHTML = `
+                    <span class="font-bold flex items-center gap-2"><i class="fa-solid ${p.isAlive ? 'fa-user text-emerald-400' : 'fa-skull text-red-500'}"></i> ${escapeHtml(p.name)}</span>
+                    <span class="font-bold"><i class="fa-solid ${r.icon}"></i> ${r.name}</span>
+                `;
+                list.appendChild(div);
+            });
+        }
+
+        // --- UTILS ---
+        window.closeModal = function() {
+            document.getElementById('custom-modal').classList.add('hidden');
+        };
+        function showModal(msg) {
+            document.getElementById('modal-msg').innerText = msg;
+            document.getElementById('custom-modal').classList.remove('hidden');
+        }
+        window.copyRoomCode = function() {
+            if (currentRoomId) {
+                const temp = document.createElement('textarea');
+                temp.value = currentRoomId;
+                document.body.appendChild(temp);
+                temp.select();
+                document.execCommand('copy');
+                document.body.removeChild(temp);
+                showModal(`ルームコード [${currentRoomId}] をコピーしました。`);
+            }
+        };
+        function escapeHtml(str) {
+            return String(str).replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[m]);
+        }
+
+        // Attach buttons
+        document.getElementById('btn-create-room').addEventListener('click', window.createRoom);
+        document.getElementById('btn-join-room').addEventListener('click', window.joinRoom);
+    </script>
+</body>
+</html>
